@@ -17,6 +17,7 @@
  */
 
 #include <linux/i2c.h>
+#include <linux/proc_fs.h>
 #include <linux/input.h>
 #include <linux/input/mt.h>
 #include <linux/slab.h>
@@ -39,6 +40,78 @@
 #include <linux/earlysuspend.h>
 /* Early-suspend level */
 #define FT_SUSPEND_LEVEL 1
+#endif
+
+
+#if defined(CONFIG_TOUCHSCREEN_GESTURE)
+#endif
+
+#define FT_PROC_DEBUG
+#if defined(FT_PROC_DEBUG)
+#define FTS_FACTORYMODE_VALUE		0x40
+#define FTS_WORKMODE_VALUE		0x00
+#endif
+#define TP_CHIPER_ID			0x54
+
+#ifdef FT_GESTURE
+#define GESTURE_LEFT			0x20
+#define GESTURE_RIGHT		0x21
+#define GESTURE_UP		    	0x22
+#define GESTURE_DOWN		0x23
+#define GESTURE_DOUBLECLICK	0x24
+#define GESTURE_O		    	0x30
+#define GESTURE_W		    	0x31
+#define GESTURE_M		    	0x32
+#define GESTURE_E		    	0x33
+#define GESTURE_C		    	0x34
+#define GESTURE_S		    	0x46
+#define GESTURE_V		    	0x54
+#define GESTURE_Z		    	0x65
+
+#define FTS_GESTRUE_POINTS 				255
+#define FTS_GESTRUE_POINTS_ONETIME  	62
+#define FTS_GESTRUE_POINTS_HEADER 		8
+#define FTS_GESTURE_OUTPUT_ADRESS 		0xD3
+#define FTS_GESTURE_OUTPUT_UNIT_LENGTH 	4
+
+unsigned short coordinate_x[150] = {0};
+unsigned short coordinate_y[150] = {0};
+#endif
+
+#if defined(CONFIG_TOUCHSCREEN_GESTURE)
+extern int ctp_get_gesture_data(void);
+extern void ctp_set_gesture_data(int value);
+#endif
+
+#define CTP_PROC_LOCKDOWN_FILE "tp_lockdown_info"
+char tp_lockdown_info[128];
+u8 uc_tp_vendor_id;
+
+#define FT_CHARGING_STATUS
+
+#if defined(FT_CHARGING_STATUS)
+int charging_flag = 0;
+extern int FG_charger_status;
+#endif
+
+static struct i2c_client *fts_proc_entry_i2c_client;
+
+static unsigned char firmware_data[] = {
+#include "FT5346_LQ_CX865_Biel0x3b_V20_D01_20151023_app.i"
+};
+static unsigned char firmware_data_biel[] = {
+#include "FT5346_LQ_CX865_Biel0x3b_V20_D01_20151023_app.i"
+};
+static unsigned char firmware_data_mutton[] = {
+#include "FT5346_LQ_CX865_Mutton0x53_Sharp_Black_V11_D01_20151022_app.i"
+};
+static unsigned char firmware_data_ofilm[] = {
+#include "FT5346_LQ_L8650_Ofilm0x51_V02_D01_20151228_app.i"
+};
+
+
+#ifdef FTS_SCAP_TEST
+#include "ft5x06_mcap_test_lib.h"
 #endif
 
 #define FT_DRIVER_VERSION	0x02
@@ -1147,6 +1220,128 @@ static ssize_t ft5x06_fw_name_store(struct device *dev,
 
 static DEVICE_ATTR(fw_name, 0664, ft5x06_fw_name_show, ft5x06_fw_name_store);
 
+static ssize_t ft5x06_lockdown_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct i2c_client *client = fts_proc_entry_i2c_client;
+
+	struct ft5x06_ts_data *data = i2c_get_clientdata(client);
+
+	size_t ret = -1;
+
+	unsigned char buf1[1000];
+	int readlen = 0;
+	int rettwo = -1;
+	ret = ft5x06_i2c_read(client, NULL, 0, buf1, readlen);
+	if (ret < 0) {
+		dev_err(&client->dev, "%s:read iic error\n", __func__);
+		return rettwo;
+	}
+	printk("%s,%d:PROC_READ_REGISTER, buf1 = %c\n", __func__, __LINE__, *buf1);
+
+
+	snprintf(buf, FT_FW_NAME_MAX_LEN - 1, "%s\n", data->fw_name);
+
+	ft5x06_fw_LockDownInfo_get_from_boot(client, data->tp_lockdown_info_temp);
+	printk("ft5x06_lockdown_show, ft5x46_ctpm_LockDownInfo_get_from_boot, tp_lockdown_info=%s\n", data->tp_lockdown_info_temp);
+	if (data->tp_lockdown_info_temp == NULL)
+		return  ret;
+	return snprintf(buf, FT_LOCKDOWN_LEN - 1, "%s\n", data->tp_lockdown_info_temp);
+}
+
+
+static ssize_t ft5x06_lockdown_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t size)
+{
+	struct ft5x06_ts_data *data = dev_get_drvdata(dev);
+
+	if (size > FT_FW_NAME_MAX_LEN - 1)
+		return -EINVAL;
+
+	strlcpy(data->tp_lockdown_info_temp, buf, size);
+	if (data->tp_lockdown_info_temp[size-1] == '\n')
+		data->tp_lockdown_info_temp[size-1] = 0;
+	return size;
+}
+
+static DEVICE_ATTR(tp_lock_down_info, (S_IWUSR|S_IRUGO|S_IWUGO), ft5x06_lockdown_show, ft5x06_lockdown_store);
+
+static ssize_t ft5x06_keypad_mode_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct ft5x06_ts_data *data = dev_get_drvdata(dev);
+	int count;
+	char c = data->keypad_mode ? '0' : '1';
+
+	count = sprintf(buf, "%c\n", c);
+
+	return count;
+}
+
+static ssize_t ft5x06_keypad_mode_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct ft5x06_ts_data *data = dev_get_drvdata(dev);
+	int i;
+
+	if (sscanf(buf, "%u", &i) == 1 && i < 2) {
+		data->keypad_mode = (i == 0);
+		return count;
+	} else {
+		dev_dbg(dev, "keypad_mode write error\n");
+		return -EINVAL;
+	}
+}
+
+static DEVICE_ATTR(keypad_mode, S_IWUSR | S_IRUSR, ft5x06_keypad_mode_show,
+		   ft5x06_keypad_mode_store);
+
+static struct attribute *ft5x06_ts_attrs[] = {
+	&dev_attr_keypad_mode.attr,
+	NULL
+};
+
+static const struct attribute_group ft5x06_ts_attr_group = {
+	.attrs = ft5x06_ts_attrs,
+};
+
+static int ft5x06_proc_init(struct ft5x06_ts_data *data)
+{
+	struct i2c_client *client = data->client;
+
+	int ret = 0;
+	char *buf, *path = NULL;
+	char *key_disabler_sysfs_node;
+	struct proc_dir_entry *proc_entry_tp = NULL;
+	struct proc_dir_entry *proc_symlink_tmp  = NULL;
+
+	buf = kzalloc(sizeof(struct ft5x06_ts_data), GFP_KERNEL);
+	if (buf)
+		path = "/devices/soc.0/78b8000.i2c/i2c-4/4-0038";
+
+	proc_entry_tp = proc_mkdir("touchpanel", NULL);
+	if (proc_entry_tp == NULL) {
+		dev_err(&client->dev, "Couldn't create touchpanel dir in procfs\n");
+		ret = -ENOMEM;
+	}
+
+	key_disabler_sysfs_node = kzalloc(sizeof(struct ft5x06_ts_data), GFP_KERNEL);
+	if (key_disabler_sysfs_node)
+		sprintf(key_disabler_sysfs_node, "/sys%s/%s", path, "keypad_mode");
+	proc_symlink_tmp = proc_symlink("capacitive_keys_enable",
+			proc_entry_tp, key_disabler_sysfs_node);
+	if (proc_symlink_tmp == NULL) {
+		dev_err(&client->dev, "Couldn't create capacitive_keys_enable symlink\n");
+		ret = -ENOMEM;
+	}
+
+	kfree(buf);
+	kfree(key_disabler_sysfs_node);
+
+	return ret;
+}
+
 static bool ft5x06_debug_addr_is_valid(int addr)
 {
 	if (addr < 0 || addr > 0xFF) {
@@ -1696,6 +1891,17 @@ static int ft5x06_ts_probe(struct i2c_client *client,
 		goto free_update_fw_sys;
 	}
 
+<<<<<<< HEAD
+=======
+	 err = sysfs_create_group(&client->dev.kobj, &ft5x06_ts_attr_group);
+	 if (err) {
+		dev_err(&client->dev, "Failure %d creating sysfs group\n",err);
+		goto free_reset_gpio;
+    }
+
+    ft5x06_proc_init(data);
+
+>>>>>>> 65a3caa... input: Create shared procfs nodes
 	data->dir = debugfs_create_dir(FT_DEBUG_DIR_NAME, NULL);
 	if (data->dir == NULL || IS_ERR(data->dir)) {
 		pr_err("debugfs_create_dir failed(%ld)\n", PTR_ERR(data->dir));
