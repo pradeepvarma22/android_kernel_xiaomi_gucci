@@ -5566,14 +5566,14 @@ static int fb_notifier_callback(struct notifier_block *self,
 
 	if (evdata && evdata->data && event == FB_EVENT_BLANK &&
 				mxt && mxt->client) {
-		blank = evdata->data;
-		if (*blank == FB_BLANK_UNBLANK) {
-			if (mxt_resume(&mxt->client->dev) != 0)
-				dev_err(&mxt->client->dev, "%s: failed\n", __func__);
-		} else if (*blank == FB_BLANK_POWERDOWN) {
-			if (mxt_suspend(&mxt->client->dev) != 0)
-				dev_err(&mxt->client->dev, "%s: failed\n", __func__);
-		}
+			blank = evdata->data;
+			if (*blank == FB_BLANK_UNBLANK || *blank == FB_BLANK_NORMAL) {
+				if (mxt_resume(&mxt->client->dev) != 0)
+					dev_err(&mxt->client->dev, "%s: failed\n", __func__);
+			} else if (*blank == FB_BLANK_POWERDOWN) {
+				if (mxt_suspend(&mxt->client->dev) != 0)
+					dev_err(&mxt->client->dev, "%s: failed\n", __func__);
+			}
 	}
 
 	return 0;

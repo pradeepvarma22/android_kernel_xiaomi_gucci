@@ -2747,10 +2747,30 @@ err_mxt_start:
 
 }
 
+/*<<<<<<< HEAD
 static const struct dev_pm_ops mxt_pm_ops = {
 #if (!defined(CONFIG_FB) && !defined(CONFIG_HAS_EARLYSUSPEND))
 	.suspend	= mxt_suspend,
 	.resume		= mxt_resume,
+=======*/
+#ifdef CONFIG_FB
+static int fb_notifier_cb(struct notifier_block *self,
+			unsigned long event, void *data)
+{
+	struct fb_event *evdata = data;
+	int *blank;
+	struct mxt_data *mxt_data =
+		container_of(self, struct mxt_data, fb_notif);
+
+	if (evdata && evdata->data && event == FB_EVENT_BLANK && mxt_data) {
+		blank = evdata->data;
+		if (*blank == FB_BLANK_UNBLANK || *blank == FB_BLANK_NORMAL) {
+			dev_dbg(&mxt_data->client->dev, "##### UNBLANK SCREEN #####\n");
+			mxt_input_enable(mxt_data->input_dev);
+#ifdef TOUCH_WAKEUP_EVENT_RECORD
+				if (atomic_read(&wakeup_flag) == 1)
+					wakeup_event_record_write(EVENT_SCREEN_ON);
+//>>>>>>> 71119e4... input: Handle an additional framebuffer hint
 #endif
 };
 #else
