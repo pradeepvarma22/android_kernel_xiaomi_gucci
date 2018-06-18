@@ -158,8 +158,10 @@ static int hw_ep_flush(struct ci13xxx *ci, int num, int dir)
 	start = ktime_get();
 	do {
 		/* flush any pending transfer */
-		hw_write(ci, OP_ENDPTFLUSH, BIT(n), BIT(n));
-		while (hw_read(ci, OP_ENDPTFLUSH, BIT(n))) {
+
+		hw_write(ci, OP_ENDPTFLUSH, ~0, BIT(n));
+		while (hw_read(ci, OP_ENDPTFLUSH, BIT(n)))
+
 			cpu_relax();
 			diff = ktime_sub(ktime_get(), start);
 			if (ktime_to_ms(diff) > USB_MAX_TIMEOUT) {
@@ -270,7 +272,7 @@ static int hw_ep_prime(struct ci13xxx *ci, int num, int dir, int is_ctrl)
 	if (is_ctrl && dir == RX && hw_read(ci, OP_ENDPTSETUPSTAT, BIT(num)))
 		return -EAGAIN;
 
-	hw_write(ci, OP_ENDPTPRIME, BIT(n), BIT(n));
+	hw_write(ci, OP_ENDPTPRIME, ~0, BIT(n));
 
 	if (is_ctrl && dir == RX && hw_read(ci, OP_ENDPTSETUPSTAT, BIT(num)))
 		return -EAGAIN;

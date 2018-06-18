@@ -347,6 +347,7 @@ __v7_setup:
 	mcr	p15, 0, r6, c10, c2, 1		@ write NMRR
 #endif
 
+
 #if defined(CONFIG_ARCH_MSM_SCORPION) && !defined(CONFIG_MSM_SMP)
 	mov     r0, #0x33
 	mcr     p15, 3, r0, c15, c0, 3          @ set L2CR1
