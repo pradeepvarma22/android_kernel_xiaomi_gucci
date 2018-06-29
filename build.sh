@@ -21,7 +21,7 @@ Anykernel_DIR=$KERNEL_DIR/Anykernel2/gucci
 TOOLCHAINDIR=$(pwd)/toolchain/arm-eabi-4.8
 DATE=$(date +"%d%m%Y")
 KERNEL_NAME="Pradeep_7"
-DEVICE="-gucci-"
+DEVICE="####"
 TYPE="   "
 FINAL_ZIP="$KERNEL_NAME""$DEVICE""$DATE""$TYPE""$VER".zip
 
@@ -67,59 +67,26 @@ echo ""
 
 
 make ARCH=arm O=$(pwd)/out gucci_defconfig
-make ARCH=arm O=$(pwd)/out -j4
+make ARCH=arm O=$(pwd)/out -j7
 export KBUILD_BUILD_USER="7"
 export KBUILD_BUILD_HOST="Pradeep"
 
 
 
 
-
-
-
-
-
-
-echo ""
-echo "#####################Kernel build completed#####################"
-echo ""
-
-
-
-
-
 if [ -e  out/arch/arm/boot/zImage ];
 then
-
-
-
-
-echo ""
-echo "#####################Kernel compilation completed#####################"
-echo ""
-
-
-
-echo ""
-echo "#####################copying zimage #####################"
-echo ""
+echo "Kernel compilation completed"
 cp $KERNEL_DIR/out/arch/arm/boot/zImage $Anykernel_DIR/
 cd $Anykernel_DIR
-
-echo ""
-echo "#####################Making flashable zip #####################"
-echo """
-
+echo "Making Flashable zip"
 echo "Generating changelog"
-
 git log --graph --pretty=format:'%s' --abbrev-commit -n 200  > changelog.txt
-
 echo "Changelog generated"
-
 zip -r9 $FINAL_ZIP * -x *.zip $FINAL_ZIP
 echo "Flashable zip Created"
 echo "Uploading file"
 curl -H "Max-Downloads: 1" -H "Max-Days: 1" --upload-file $FINAL_ZIP https://transfer.sh/$FINAL_ZIP
 else
-echo "Kernel not compiled,fix errors and compile again-/*_*/"
+echo "Kernel not compiled,fix errors and compile again"
 fi;
