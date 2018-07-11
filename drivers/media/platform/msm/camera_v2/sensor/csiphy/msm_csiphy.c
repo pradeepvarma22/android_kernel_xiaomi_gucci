@@ -871,3 +871,4 @@ module_init(msm_csiphy_init_module);
 module_exit(msm_csiphy_exit_module);
 MODULE_DESCRIPTION("MSM CSIPHY driver");
 MODULE_LICENSE("GPL v2");
+
