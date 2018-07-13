@@ -65,7 +65,8 @@ int mdss_dsi_clk_init(struct platform_device *pdev,
 	}
 
 	if ((ctrl->panel_data.panel_info.type == MIPI_CMD_PANEL) ||
-		ctrl->panel_data.panel_info.mipi.dynamic_switch_enabled) {
+		ctrl->panel_data.panel_info.mipi.dynamic_switch_enabled ||
+		ctrl->panel_data.panel_info.ulps_suspend_enabled) {
 		ctrl->mmss_misc_ahb_clk = clk_get(dev, "core_mmss_clk");
 		if (IS_ERR(ctrl->mmss_misc_ahb_clk)) {
 			ctrl->mmss_misc_ahb_clk = NULL;
@@ -545,6 +546,20 @@ static int mdss_dsi_clk_ctrl_sub(struct mdss_dsi_ctrl_pdata *ctrl,
 			}
 		}
 		if (clk_type & DSI_LINK_CLKS) {
+			if (ctrl->mmss_clamp) {
+				mdss_dsi_phy_init(pdata);
+				mdss_dsi_ctrl_setup(pdata);
+				mdss_dsi_host_init(pdata);
+				mdss_dsi_op_mode_config(pdata->panel_info.mipi.mode,
+					pdata);
+				/*
+				 * ULPS Entry Request. This is needed because, after power
+				 * collapse and reset, the DSI controller resets back to
+				 * idle state and not ULPS.
+				 */
+				mdss_dsi_ulps_config(ctrl, 1);
+				mdss_dsi_clamp_ctrl(ctrl, 0);
+			}
 			rc = mdss_dsi_link_clk_start(ctrl);
 			if (rc) {
 				pr_err("Failed to start link clocks. rc=%d\n",
@@ -568,10 +583,15 @@ static int mdss_dsi_clk_ctrl_sub(struct mdss_dsi_ctrl_pdata *ctrl,
 			 * No need to enable ULPS when turning off clocks
 			 * while blanking the panel.
 			 */
-			if ((mdss_dsi_ulps_feature_enabled(pdata)) &&
-				(pdata->panel_info.panel_power_on))
+			if (((mdss_dsi_ulps_feature_enabled(pdata)) &&
+				(pdata->panel_info.panel_power_on)) ||
+				pdata->panel_info.ulps_suspend_enabled) {
 				mdss_dsi_ulps_config(ctrl, 1);
-			mdss_dsi_link_clk_stop(ctrl);
+				mdss_dsi_link_clk_stop(ctrl);
+				mdss_dsi_clamp_ctrl(ctrl, 1);
+			} else {
+				mdss_dsi_link_clk_stop(ctrl);
+			}
 		}
 		if (clk_type & DSI_BUS_CLKS) {
 			mdss_dsi_bus_clk_stop(ctrl);
@@ -837,29 +857,48 @@ void mdss_dsi_phy_init(struct mdss_panel_data *pdata)
 		}
 	}
 
-	/* Regulator ctrl 0 */
-	MIPI_OUTP((temp_ctrl->phy_io.base) + 0x280, 0x0);
-	/* Regulator ctrl - CAL_PWR_CFG */
-	MIPI_OUTP((temp_ctrl->phy_io.base) + 0x298, pd->regulator[6]);
-
-	/* Regulator ctrl - TEST */
-	MIPI_OUTP((temp_ctrl->phy_io.base) + 0x294, pd->regulator[5]);
-	/* Regulator ctrl 3 */
-	MIPI_OUTP((temp_ctrl->phy_io.base) + 0x28c, pd->regulator[3]);
-	/* Regulator ctrl 2 */
-	MIPI_OUTP((temp_ctrl->phy_io.base) + 0x288, pd->regulator[2]);
-	/* Regulator ctrl 1 */
-	MIPI_OUTP((temp_ctrl->phy_io.base) + 0x284, pd->regulator[1]);
-	/* Regulator ctrl 0 */
-	MIPI_OUTP((temp_ctrl->phy_io.base) + 0x280, pd->regulator[0]);
-	/* Regulator ctrl 4 */
-	MIPI_OUTP((temp_ctrl->phy_io.base) + 0x290, pd->regulator[4]);
-
-	/* LDO ctrl */
-	if (pd->reg_ldo_mode)
-		MIPI_OUTP((ctrl_pdata->phy_io.base) + 0x1dc, 0x25);
-	else
+	if (pd->reg_ldo_mode) {
+		/* Regulator ctrl 0 */
+		MIPI_OUTP((temp_ctrl->phy_io.base) + 0x280, 0x0);
+		/* Regulator ctrl - CAL_PWR_CFG */
+		MIPI_OUTP((temp_ctrl->phy_io.base) + 0x298, pd->regulator[6]);
+		/* Add H/w recommended delay */
+		udelay(1000);
+		/* Regulator ctrl - TEST */
+		MIPI_OUTP((temp_ctrl->phy_io.base) + 0x294, pd->regulator[5]);
+		/* Regulator ctrl 3 */
+		MIPI_OUTP((temp_ctrl->phy_io.base) + 0x28c, pd->regulator[3]);
+		/* Regulator ctrl 2 */
+		MIPI_OUTP((temp_ctrl->phy_io.base) + 0x288, pd->regulator[2]);
+		/* Regulator ctrl 1 */
+		MIPI_OUTP((temp_ctrl->phy_io.base) + 0x284, pd->regulator[1]);
+		/* Regulator ctrl 4 */
+		MIPI_OUTP((temp_ctrl->phy_io.base) + 0x290, pd->regulator[4]);
+		/* LDO ctrl */
+		if (MIPI_INP(ctrl_pdata->ctrl_base) == MDSS_DSI_HW_REV_103_1)
+			MIPI_OUTP((ctrl_pdata->phy_io.base) + 0x1dc, 0x05);
+		else
+			MIPI_OUTP((ctrl_pdata->phy_io.base) + 0x1dc, 0x0d);
+	} else {
+		/* Regulator ctrl 0 */
+		MIPI_OUTP((temp_ctrl->phy_io.base) + 0x280, 0x0);
+		/* Regulator ctrl - CAL_PWR_CFG */
+		MIPI_OUTP((temp_ctrl->phy_io.base) + 0x298, pd->regulator[6]);
+		/* Add H/w recommended delay */
+		udelay(1000);
+		/* Regulator ctrl 1 */
+		MIPI_OUTP((temp_ctrl->phy_io.base) + 0x284, pd->regulator[1]);
+		/* Regulator ctrl 2 */
+		MIPI_OUTP((temp_ctrl->phy_io.base) + 0x288, pd->regulator[2]);
+		/* Regulator ctrl 3 */
+		MIPI_OUTP((temp_ctrl->phy_io.base) + 0x28c, pd->regulator[3]);
+		/* Regulator ctrl 4 */
+		MIPI_OUTP((temp_ctrl->phy_io.base) + 0x290, pd->regulator[4]);
+		/* LDO ctrl */
 		MIPI_OUTP((ctrl_pdata->phy_io.base) + 0x1dc, 0x00);
+		/* Regulator ctrl 0 */
+		MIPI_OUTP((temp_ctrl->phy_io.base) + 0x280, pd->regulator[0]);
+	}
 
 	off = 0x0140;	/* phy timing ctrl 0 - 11 */
 	for (i = 0; i < 12; i++) {
