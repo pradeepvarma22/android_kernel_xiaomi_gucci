@@ -642,6 +642,11 @@ static void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 				MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL, 0x30, 0x30);
 		wcd_mbhc_report_plug(mbhc, 1, SND_JACK_HEADPHONE);
 	} else if (plug_type == MBHC_PLUG_TYPE_GND_MIC_SWAP) {
+			if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE)
+				wcd_mbhc_report_plug(mbhc, 0,
+						SND_JACK_HEADPHONE);
+			if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADSET)
+				wcd_mbhc_report_plug(mbhc, 0, SND_JACK_HEADSET);
 		wcd_mbhc_report_plug(mbhc, 1, SND_JACK_UNSUPPORTED);
 	} else if (plug_type == MBHC_PLUG_TYPE_HEADSET) {
 		/*
@@ -945,6 +950,10 @@ report:
 			mbhc->btn_press_intr);
 	wcd_mbhc_find_plug_and_report(mbhc, plug_type);
 exit:
+	/* Disable external voltage source to micbias if present */
+	if (mbhc->mbhc_cb && mbhc->mbhc_cb->enable_mb_source)
+		mbhc->mbhc_cb->enable_mb_source(codec, false);
+
 	micbias2 = snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MICB_2_EN);
 	wcd_configure_cap(mbhc, (micbias2 & 0x80));
 	wcd9xxx_spmi_unlock_sleep();
@@ -964,6 +973,10 @@ static void wcd_mbhc_detect_plug_type(struct wcd_mbhc *mbhc)
 
 	pr_debug("%s: enter\n", __func__);
 	WCD_MBHC_RSC_ASSERT_LOCKED(mbhc);
+
+	/* Enable external voltage source to micbias if present */
+	if (mbhc->mbhc_cb && mbhc->mbhc_cb->enable_mb_source)
+		mbhc->mbhc_cb->enable_mb_source(codec, true);
 
 	wcd_configure_cap(mbhc, true);
 	/* Enable micbias */

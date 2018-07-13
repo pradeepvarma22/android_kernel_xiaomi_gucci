@@ -85,6 +85,7 @@ struct wcd9xxx_spmi_map {
 
 	enum wcd9xxx_spmi_pm_state pm_state;
 	struct mutex pm_lock;
+	struct mutex irq_lock;
 	/* pm_wq notifies change of pm_state */
 	wait_queue_head_t pm_wq;
 	struct pm_qos_request pm_qos_req;
@@ -208,14 +209,18 @@ static irqreturn_t wcd9xxx_spmi_irq_handler(int linux_irq, void *data)
 	int irq, i, j;
 	u8 status[NUM_IRQ_REGS] = {0};
 
+	mutex_lock(&map.irq_lock);
 	if (unlikely(wcd9xxx_spmi_lock_sleep() == false)) {
 		pr_err("Failed to hold suspend\n");
+		mutex_unlock(&map.irq_lock);
 		return IRQ_NONE;
 	}
 
 	irq = get_irq_bit(linux_irq);
-	if (irq == MAX_NUM_IRQS)
+	if (irq == MAX_NUM_IRQS) {
+		mutex_unlock(&map.irq_lock);
 		return IRQ_HANDLED;
+	}
 
 	status[BIT_BYTE(irq)] |= BYTE_BIT_MASK(irq);
 	for (i = 0; i < NUM_IRQ_REGS; i++) {
@@ -236,6 +241,7 @@ static irqreturn_t wcd9xxx_spmi_irq_handler(int linux_irq, void *data)
 	}
 	map.handled[BIT_BYTE(irq)] &= ~BYTE_BIT_MASK(irq);
 	wcd9xxx_spmi_unlock_sleep();
+	mutex_unlock(&map.irq_lock);
 
 	return IRQ_HANDLED;
 }
@@ -337,17 +343,13 @@ bool wcd9xxx_spmi_lock_sleep()
 	 * but btn0_lpress_fn is not wcd9xxx_spmi_irq_thread's subroutine and
 	 * It can race with wcd9xxx_spmi_irq_thread.
 	 * So need to embrace wlock_holders with mutex.
-	 *
-	 * If system didn't resume, we can simply return false so codec driver's
-	 * IRQ handler can return without handling IRQ.
-	 * As interrupt line is still active, codec will have another IRQ to
-	 * retry shortly.
 	 */
 	mutex_lock(&map.pm_lock);
 	if (map.wlock_holders++ == 0) {
 		pr_debug("%s: holding wake lock\n", __func__);
 		pm_qos_update_request(&map.pm_qos_req,
 				      msm_cpuidle_get_deep_idle_latency());
+		pm_stay_awake(&map.spmi[0]->dev);
 	}
 	mutex_unlock(&map.pm_lock);
 	pr_debug("%s: wake lock counter %d\n", __func__,
@@ -363,6 +365,7 @@ bool wcd9xxx_spmi_lock_sleep()
 						 WCD9XXX_PM_SLEEPABLE,
 						 WCD9XXX_PM_AWAKE) ==
 						 WCD9XXX_PM_AWAKE)));
+
 	pr_debug("%s: leaving pm_state = %d\n", __func__, map.pm_state);
 	return true;
 }
@@ -382,6 +385,7 @@ void wcd9xxx_spmi_unlock_sleep()
 			map.pm_state = WCD9XXX_PM_SLEEPABLE;
 		pm_qos_update_request(&map.pm_qos_req,
 				PM_QOS_DEFAULT_VALUE);
+		pm_relax(&map.spmi[0]->dev);
 	}
 	mutex_unlock(&map.pm_lock);
 	pr_debug("%s: wake lock counter %d\n", __func__,
@@ -408,6 +412,7 @@ int wcd9xxx_spmi_irq_init(void)
 	for (; i < MAX_NUM_IRQS; i++)
 		map.mask[BIT_BYTE(i)] |= BYTE_BIT_MASK(i);
 	mutex_init(&map.pm_lock);
+	mutex_init(&map.irq_lock);
 	map.wlock_holders = 0;
 	map.pm_state = WCD9XXX_PM_SLEEPABLE;
 	init_waitqueue_head(&map.pm_wq);

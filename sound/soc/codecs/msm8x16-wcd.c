@@ -1686,6 +1686,7 @@ static int msm8x16_wcd_codec_enable_spk_pa(struct snd_soc_dapm_widget *w,
 		msm8x16_wcd->mute_mask |= SPKR_PA_DISABLE;
 		/*
 		 * Add sleep for 1 ms for mute to take effect
+		 * Add 1 ms sleep for the mute to take effect
 		 */
 		usleep_range(CODEC_DELAY_1_MS, CODEC_DELAY_1_1_MS);
 		snd_soc_update_bits(codec,
@@ -2205,6 +2206,7 @@ static int msm8x16_wcd_codec_enable_rx_bias(struct snd_soc_dapm_widget *w,
 	case SND_SOC_DAPM_POST_PMD:
 		msm8x16_wcd->rx_bias_count--;
 		if (msm8x16_wcd->rx_bias_count == 0) {
+
 			snd_soc_update_bits(codec,
 					MSM8X16_WCD_A_ANALOG_RX_COM_BIAS_DAC,
 					0x01, 0x00);
@@ -3671,6 +3673,7 @@ static int msm8x16_wcd_spmi_probe(struct spmi_device *spmi)
 		msm8x16_wcd_modules[0].base = (spmi->sid << 16) +
 						wcd_resource->start;
 		wcd9xxx_spmi_set_dev(msm8x16_wcd_modules[0].spmi, 0);
+		device_init_wakeup(&spmi->dev, true);
 		break;
 	case TOMBAK_CORE_1_SPMI_ADDR:
 		msm8x16_wcd_modules[1].spmi = spmi;
