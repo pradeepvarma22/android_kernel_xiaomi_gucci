@@ -815,4 +815,5 @@ module_exit(aw2013_driver_exit);
 
 MODULE_AUTHOR("Kim Kyuwon <q1.kim@samsung.com>");
 MODULE_DESCRIPTION("AW2013 LED driver");
-MODULE_LICENSE("GPL v2");s
+MODULE_LICENSE("GPL v2");
+
