@@ -13,7 +13,6 @@
  */
 
 #include <linux/module.h>
-#include <linux/proc_fs.h>
 #include <linux/init.h>
 #include <linux/delay.h>
 #include <linux/firmware.h>
@@ -2152,68 +2151,6 @@ static const struct attribute_group mxt_attr_group = {
 	.attrs = mxt_attrs,
 };
 
-static int mxt_proc_init(struct mxt_data *data)
-{
-	int ret = 0;
-	char *buf, *path = NULL;
-	char *key_disabler_sysfs_node;
-	struct proc_dir_entry *proc_entry_tp = NULL;
-	struct proc_dir_entry *proc_symlink_tmp  = NULL;
-
-	buf = kzalloc(sizeof(struct mxt_data), GFP_KERNEL);
-	if (buf)
-		path = "/devices/soc.0/78b8000.i2c/i2c-4/4-004a";
-
-	proc_entry_tp = proc_mkdir("touchpanel", NULL);
-	if (proc_entry_tp == NULL) {
-		dev_err(&data->client->dev, "atmel_mxt_ts: Couldn't create touchpanel dir in procfs\n");
-		ret = -ENOMEM;
-	}
-
-	key_disabler_sysfs_node = kzalloc(sizeof(struct mxt_data), GFP_KERNEL);
-	if (key_disabler_sysfs_node)
-		sprintf(key_disabler_sysfs_node, "/sys%s/%s", path, "keypad_mode");
-	proc_symlink_tmp = proc_symlink("capacitive_keys_enable",
-			proc_entry_tp, key_disabler_sysfs_node);
-	if (proc_symlink_tmp == NULL) {
-		dev_err(&data->client->dev, "atmel_mxt_ts: Couldn't create capacitive_keys_enable symlink\n");
-		ret = -ENOMEM;
-	}
-
-	kfree(buf);
-	kfree(key_disabler_sysfs_node);
-
-	return ret;
-}
-
-static int mxt_disable_hsync_config(struct mxt_data *data)
-{
-	int error;
-	struct device *dev = &data->client->dev;
-
-	error = mxt_write_object(data, MXT_SPT_CTECONFIG_T46,
-			MXT_CTECONFIG_ADCSPERSYNC, 0);
-	if (error) {
-		dev_err(dev, "Write to T46 byte %d failed!\n",
-				MXT_CTECONFIG_ADCSPERSYNC);
-		return error;
-	}
-
-	error = mxt_write_object(data, MXT_SPT_SELFCAPCONFIG_T111,
-			MXT_SELF_ADCSPERSYNC_INST0, 0);
-	if (error) {
-		dev_err(dev, "Write to T111 byte %d failed!\n",
-				MXT_SELF_ADCSPERSYNC_INST0);
-		return error;
-	}
-
-	error = mxt_write_object(data, MXT_SPT_SELFCAPCONFIG_T111,
-			MXT_SELF_ADCSPERSYNC_INST1, 0);
-	if (error) {
-		dev_err(dev, "Write to T111 byte %d failed!\n",
-				MXT_SELF_ADCSPERSYNC_INST1);
-		return error;
-	}
 
 #if defined(CONFIG_SECURE_TOUCH)
 static void mxt_secure_touch_stop(struct mxt_data *data, int blocking)
@@ -3309,27 +3246,9 @@ static int mxt_probe(struct i2c_client *client,
 	if (error)
 		goto err_free_irq;
 
-//<<<<<<< HEAD
 	error = sysfs_create_group(&client->dev.kobj, &mxt_attr_group);
 	if (error)
 		goto err_unregister_device;
-//======
-	mxt_proc_init(data);
-
-	sysfs_bin_attr_init(&data->mem_access_attr);
-	data->mem_access_attr.attr.name = "mem_access";
-	data->mem_access_attr.attr.mode = S_IRUGO | S_IWUSR;
-	data->mem_access_attr.read = mxt_mem_access_read;
-	data->mem_access_attr.write = mxt_mem_access_write;
-	data->mem_access_attr.size = data->mem_size;
-
-	if (sysfs_create_bin_file(&client->dev.kobj,
-				  &data->mem_access_attr) < 0) {
-		dev_err(&client->dev, "Failed to create %s\n",
-			data->mem_access_attr.attr.name);
-		goto err_remove_sysfs_group;
-	}
-//>>>>>>> 65a3caa... input: Create shared procfs nodes
 
 #if defined(CONFIG_FB)
 	data->fb_notif.notifier_call = fb_notifier_callback;
