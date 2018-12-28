@@ -4963,7 +4963,7 @@ static void mxt_start(struct mxt_data *data, bool resume)
 
 	dev_info(dev, "mxt_start\n");
 #ifdef CONFIG_WAKE_GESTURES
-	if (resume && device_may_wakeup(dev) && (s2w_switch || dt2w_switch))
+	if (s2w_switch || dt2w_switch)
 		board_disable_irq_wake(data->pdata, data->irq);
 
 	if (dt2w_switch_changed) {
@@ -5053,14 +5053,9 @@ static void mxt_stop(struct mxt_data *data, bool suspend)
 		mxt_regulator_disable(data);
 	else {
 #ifdef CONFIG_WAKE_GESTURES
-		if (suspend && device_may_wakeup(dev) && (s2w_switch || dt2w_switch)) {
-			mxt_set_t7_power_cfg(data, MXT_POWER_CFG_WAKE_GESTURES);
-			mxt_process_messages_until_invalid(data);
-			if (atomic_read(&data->depth) <= 0) {
-				atomic_inc(&data->depth);
-				board_enable_irq(pdata, data->irq);
-			}
+		if (s2w_switch || dt2w_switch) {
 			board_enable_irq_wake(data->pdata, data->irq);
+			mxt_set_t7_power_cfg(data, MXT_POWER_CFG_WAKE_GESTURES);
 		} else
 #endif
 		mxt_set_t7_power_cfg(data, MXT_POWER_CFG_DEEPSLEEP);
@@ -5496,7 +5491,6 @@ static int mxt_probe(struct i2c_client *client,
 	dev_info(&client->dev, "Mxt probe finished\n");
 #ifdef CONFIG_WAKE_GESTURES
 	gl_data = data;
-	device_init_wakeup(&client->dev, 1);
 #endif
 
 	return 0;
