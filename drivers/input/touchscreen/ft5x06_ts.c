@@ -776,7 +776,7 @@ static int fb_notifier_callback(struct notifier_block *self,
 	if (evdata && evdata->data && event == FB_EVENT_BLANK &&
 			ft5x06_data && ft5x06_data->client) {
 		blank = evdata->data;
-		if (*blank == FB_BLANK_UNBLANK || *blank == FB_BLANK_NORMAL)
+		if (*blank == FB_BLANK_UNBLANK)
 			ft5x06_ts_resume(&ft5x06_data->client->dev);
 		else if (*blank == FB_BLANK_POWERDOWN)
 			ft5x06_ts_suspend(&ft5x06_data->client->dev);
@@ -1891,6 +1891,8 @@ static int ft5x06_ts_probe(struct i2c_client *client,
 		goto free_update_fw_sys;
 	}
 
+<<<<<<< HEAD
+=======
 	 err = sysfs_create_group(&client->dev.kobj, &ft5x06_ts_attr_group);
 	 if (err) {
 		dev_err(&client->dev, "Failure %d creating sysfs group\n",err);
@@ -1899,6 +1901,7 @@ static int ft5x06_ts_probe(struct i2c_client *client,
 
     ft5x06_proc_init(data);
 
+>>>>>>> 65a3caa... input: Create shared procfs nodes
 	data->dir = debugfs_create_dir(FT_DEBUG_DIR_NAME, NULL);
 	if (data->dir == NULL || IS_ERR(data->dir)) {
 		pr_err("debugfs_create_dir failed(%ld)\n", PTR_ERR(data->dir));
